@@ -87,7 +87,7 @@
     "razorpay": "^2.9.6"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.0.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
