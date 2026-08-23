@@ -1,0 +1,82 @@
+<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" font-family="'Trebuchet MS', 'Gill Sans', 'Century Gothic', sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F4FDFB"/>
+      <stop offset="100%" stop-color="#E6F8F4"/>
+    </linearGradient>
+    <linearGradient id="mg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#007A8C"/>
+      <stop offset="100%" stop-color="#00A080"/>
+    </linearGradient>
+    <linearGradient id="ag" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF8C42"/>
+      <stop offset="100%" stop-color="#FFB347"/>
+    </linearGradient>
+    <radialGradient id="ambient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#00A080" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#00A080" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="amberGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0.55 0 0 0 0  0.28 0 0 0 0  0 0 0 0 0  0 0 0 0.45 0" result="c"/>
+      <feMerge><feMergeNode in="c"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="300" height="300" fill="url(#bg)" rx="32"/>
+  <rect width="300" height="300" fill="url(#ambient)" rx="32"/>
+
+  <!-- Outer ghost ring -->
+  <circle cx="150" cy="138" r="108" fill="none" stroke="#007A8C" stroke-width="1" opacity="0.1"/>
+
+  <!-- Segmented arcs -->
+  <path d="M150,30  A108,108 0 0 1 258,138" fill="none" stroke="url(#mg)" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M258,138 A108,108 0 0 1 209,231" fill="none" stroke="url(#mg)" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M91,231  A108,108 0 0 1 42,138"  fill="none" stroke="url(#mg)" stroke-width="5.5" stroke-linecap="round" opacity="0.22"/>
+  <path d="M42,138  A108,108 0 0 1 150,30"  fill="none" stroke="url(#mg)" stroke-width="5.5" stroke-linecap="round" opacity="0.22"/>
+
+  <!-- Mid ring -->
+  <circle cx="150" cy="138" r="78" fill="none" stroke="#007A8C" stroke-width="1" opacity="0.08"/>
+
+  <!-- Core circle — white -->
+  <circle cx="150" cy="138" r="62" fill="white"/>
+  <circle cx="150" cy="138" r="60" fill="none" stroke="#007A8C" stroke-width="1" opacity="0.1"/>
+
+  <!-- Plus / cross -->
+  <rect x="143" y="106" width="14" height="64" rx="7" fill="url(#mg)" filter="url(#glow)"/>
+  <rect x="118" y="131" width="64" height="14" rx="7" fill="url(#mg)" filter="url(#glow)"/>
+
+  <!-- Amber centre spark -->
+  <circle cx="150" cy="138" r="9" fill="url(#ag)" filter="url(#amberGlow)"/>
+  <circle cx="150" cy="138" r="4" fill="#FFF3E0" opacity="0.8"/>
+
+  <!-- Arc break amber dots -->
+  <circle cx="218" cy="208" r="6" fill="#FF8C42" filter="url(#amberGlow)" opacity="0.9"/>
+  <circle cx="82"  cy="208" r="6" fill="#FF8C42" opacity="0.25"/>
+
+  <!-- Rays -->
+  <line x1="150" y1="14"  x2="150" y2="2"   stroke="#007A8C" stroke-width="2.5" stroke-linecap="round" opacity="0.45"/>
+  <line x1="272" y1="138" x2="284" y2="138" stroke="#007A8C" stroke-width="2.5" stroke-linecap="round" opacity="0.45"/>
+  <line x1="150" y1="262" x2="150" y2="274" stroke="#007A8C" stroke-width="2.5" stroke-linecap="round" opacity="0.14"/>
+  <line x1="28"  y1="138" x2="16"  y2="138" stroke="#007A8C" stroke-width="2.5" stroke-linecap="round" opacity="0.14"/>
+  <line x1="226" y1="62"  x2="235" y2="53"  stroke="#007A8C" stroke-width="2"   stroke-linecap="round" opacity="0.32"/>
+  <line x1="74"  y1="62"  x2="65"  y2="53"  stroke="#007A8C" stroke-width="2"   stroke-linecap="round" opacity="0.12"/>
+  <line x1="226" y1="214" x2="235" y2="223" stroke="#007A8C" stroke-width="2"   stroke-linecap="round" opacity="0.09"/>
+  <line x1="74"  y1="214" x2="65"  y2="223" stroke="#007A8C" stroke-width="2"   stroke-linecap="round" opacity="0.09"/>
+
+  <!-- OJAS wordmark -->
+  <text x="150" y="284"
+    text-anchor="middle"
+    font-size="28" font-weight="700" letter-spacing="6"
+    fill="#041C24" opacity="0.92">OJAS</text>
+
+  <!-- Amber underline -->
+  <rect x="111" y="289" width="78" height="2.5" rx="1.25" fill="url(#ag)" opacity="0.75"/>
+
+</svg>

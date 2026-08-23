@@ -1,0 +1,12 @@
+-- Migration: familyupdate_provider_message_id
+--
+-- Historical incremental migration (already applied to production Supabase).
+-- Added FamilyUpdate.providerMessageId + Message.providerMessageId so that
+-- family-update delivery can match WhatsApp provider message IDs without losing
+-- the FamilyUpdate record if the secondary Message insert fails.
+--
+-- NOTE: This migration's schema changes are already reflected in the cumulative
+-- 20260101000000_init migration.sql. This file preserves the migration history.
+-- FamilyUpdate uses the existing MessageStatus enum (NOT a separate FamilyUpdateStatus enum).
+
+-- No SQL to execute (already in cumulative schema).

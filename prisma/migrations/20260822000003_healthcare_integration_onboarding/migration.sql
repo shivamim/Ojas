@@ -1,0 +1,30 @@
+-- Migration: healthcare_integration_onboarding
+--
+-- Historical incremental migration (already applied to production Supabase).
+-- Added the full healthcare integration + zero-code onboarding schema:
+--   - HospitalIntegrationProfile (HFR, PM-JAY facility, SHA, HEM, WASA, NHCX
+--     participant code, 8 live-gate fields, readiness tracking)
+--   - ABHA identity model (verificationSource, isAuthoritative, reconciliation
+--     result/override/timestamp/actor, MANUALLY_RECORDED state)
+--   - NHCX models (NhcxClaim, NhcxCoverageEligibility, NhcxCommunication,
+--     ExternalTransaction) with FHIR artifact storage + idempotency keys
+--   - PM-JAY models (PmjayBeneficiary, PmjayPreauth, PmjayClaim, PmjayDocument,
+--     PmjayQuery, PmjayPackage, ClaimDocumentRequirement) with provenance
+--     (source, isAuthoritative, isSimulated, canUseForBilling) + inter-state
+--     portability (isInterStatePortability, homeState, treatmentState) +
+--     coverage pools (BASE_FAMILY_FLOATER, SENIOR_CITIZEN_TOPUP)
+--   - NabhEvidence, NormalizedClaim, PayerProfile, WebhookEvent
+--   - Extra fields on Hospital (code, email, phone, address, isActive, hfrId,
+--     pmjayFacilityId), User (isActive, sessionToken), AuditLog (entityType,
+--     entityId, fieldPath, oldValue, newValue, actorEmail, actorRole, requestId)
+--
+-- NOTE: This migration's schema changes are already reflected in the cumulative
+-- 20260101000000_init migration.sql. This file preserves the migration history.
+--
+-- Truthfulness rules preserved:
+--   - Manual ABHA entry → MANUALLY_RECORDED, NOT VERIFIED, NOT authoritative
+--   - Sandbox/simulated PM-JAY → isSimulated=true, canUseForBilling=false
+--   - NHCX MANUAL_PORTAL → isAuthoritative=true, canUseForBilling=false until explicit claim-result
+--   - NHCX live-gating: 8 sequential gates, no auto-promotion to LIVE
+
+-- No SQL to execute (already in cumulative schema).

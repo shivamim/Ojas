@@ -1,0 +1,460 @@
+/* Design tokens for Ojas — emerald/teal primary, amber accent, rose reserved
+   for critical risk only. Dark mode verified working. Glass + aurora utilities.
+   Extended elevation pass: layered substrate, brand-tinted shadows, severity
+   rails, mono numerics, masked hero grid, chart tokens. Dark-mode parity on
+   every addition; prefers-reduced-motion respected throughout. */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+}
+
+:root {
+  --radius: 0.75rem;
+  /* Light: warm off-white background, emerald/teal primary */
+  --background: oklch(0.99 0.005 165);
+  --foreground: oklch(0.18 0.02 200);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.02 200);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.02 200);
+  --primary: oklch(0.62 0.14 165);          /* emerald/teal */
+  --primary-foreground: oklch(0.99 0.01 165);
+  --secondary: oklch(0.96 0.015 165);
+  --secondary-foreground: oklch(0.25 0.02 200);
+  --muted: oklch(0.965 0.008 165);
+  --muted-foreground: oklch(0.45 0.02 200);  /* refined up from 0.48 for AA on warm-white */
+  --accent: oklch(0.92 0.06 75);             /* amber accent */
+  --accent-foreground: oklch(0.28 0.04 75);
+  --destructive: oklch(0.58 0.22 25);        /* rose, reserved for critical */
+  --border: oklch(0.9 0.01 165);
+  --input: oklch(0.92 0.01 165);
+  --ring: oklch(0.62 0.14 165);
+  --chart-1: oklch(0.62 0.14 165);           /* primary emerald */
+  --chart-2: oklch(0.7 0.13 75);             /* amber */
+  --chart-3: oklch(0.6 0.18 25);             /* rose — critical only */
+  --chart-4: oklch(0.65 0.12 230);           /* slate-blue */
+  --chart-5: oklch(0.7 0.15 300);            /* magenta */
+  --chart-grid: oklch(0.9 0.01 165 / 0.7);   /* recharts gridline */
+  --chart-axis: oklch(0.55 0.02 200);        /* recharts axis text */
+  --sidebar: oklch(0.985 0.005 165);
+  --sidebar-foreground: oklch(0.18 0.02 200);
+  --sidebar-primary: oklch(0.62 0.14 165);
+  --sidebar-primary-foreground: oklch(0.99 0.01 165);
+  --sidebar-accent: oklch(0.95 0.02 165);
+  --sidebar-accent-foreground: oklch(0.25 0.02 200);
+  --sidebar-border: oklch(0.9 0.01 165);
+  --sidebar-ring: oklch(0.62 0.14 165);
+  /* Layered substrate steps — between background and card */
+  --surface: oklch(0.975 0.006 165);
+  --surface-2: oklch(0.95 0.01 165);
+}
+
+.dark {
+  --background: oklch(0.16 0.015 200);
+  --foreground: oklch(0.96 0.01 165);
+  --card: oklch(0.21 0.02 200);
+  --card-foreground: oklch(0.96 0.01 165);
+  --popover: oklch(0.21 0.02 200);
+  --popover-foreground: oklch(0.96 0.01 165);
+  --primary: oklch(0.72 0.15 165);
+  --primary-foreground: oklch(0.16 0.02 200);
+  --secondary: oklch(0.27 0.02 200);
+  --secondary-foreground: oklch(0.96 0.01 165);
+  --muted: oklch(0.25 0.015 200);
+  --muted-foreground: oklch(0.72 0.015 165);
+  --accent: oklch(0.75 0.14 75);
+  --accent-foreground: oklch(0.2 0.03 75);
+  --destructive: oklch(0.68 0.2 25);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.72 0.15 165);
+  --chart-1: oklch(0.72 0.15 165);
+  --chart-2: oklch(0.78 0.14 75);
+  --chart-3: oklch(0.7 0.2 25);
+  --chart-4: oklch(0.7 0.13 230);
+  --chart-5: oklch(0.72 0.16 300);
+  --chart-grid: oklch(1 0 0 / 8%);
+  --chart-axis: oklch(0.68 0.015 165);
+  --sidebar: oklch(0.19 0.018 200);
+  --sidebar-foreground: oklch(0.96 0.01 165);
+  --sidebar-primary: oklch(0.72 0.15 165);
+  --sidebar-primary-foreground: oklch(0.16 0.02 200);
+  --sidebar-accent: oklch(0.25 0.015 200);
+  --sidebar-accent-foreground: oklch(0.96 0.01 165);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.72 0.15 165);
+  --surface: oklch(0.185 0.016 200);
+  --surface-2: oklch(0.235 0.018 200);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: oklch(0.62 0.14 165 / 0.22);
+  }
+  .dark ::selection {
+    background: oklch(0.72 0.15 165 / 0.32);
+  }
+}
+
+/* ── Type scale (deliberate weight/tracking, committed to Geist) ─────────── */
+.text-display {
+  font-size: clamp(2.5rem, 1.6rem + 3.6vw, 4rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+}
+.text-h1 {
+  font-size: clamp(2rem, 1.5rem + 2vw, 2.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+.text-h2 {
+  font-size: clamp(1.625rem, 1.3rem + 1.3vw, 2.25rem);
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  font-weight: 600;
+}
+.text-eyebrow {
+  font-size: 0.7rem;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+/* Mono numerics — the clinical command-center accent. tabular for scanning. */
+.num {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "zero";
+}
+
+/* ── Aurora ambient background ───────────────────────────────────────────
+   overflow: clip keeps the blurred pseudo-element inside the wrapper bounds
+   (can't spill past the footer). `clip` is used instead of `hidden` so it does
+   NOT create a scroll container and does NOT break position: sticky descendants
+   (sticky header / sidebar still work). The ::before uses inset: 0 + a fixed
+   -64px margin bleed for the blur feathering — a capped, page-length-independent
+   amount instead of the old inset: -20% which ballooned to thousands of px on
+   tall pages and created a giant empty scroll gap below the footer. */
+.aurora-bg {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+}
+.aurora-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: -64px;
+  z-index: -1;
+  background:
+    radial-gradient(40% 50% at 20% 25%, oklch(0.72 0.15 165 / 0.18), transparent 70%),
+    radial-gradient(35% 45% at 80% 20%, oklch(0.78 0.14 75 / 0.14), transparent 70%),
+    radial-gradient(45% 55% at 60% 85%, oklch(0.62 0.14 165 / 0.12), transparent 70%);
+  filter: blur(40px);
+  animation: aurora-drift 18s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.dark .aurora-bg::before {
+  background:
+    radial-gradient(40% 50% at 20% 25%, oklch(0.72 0.15 165 / 0.22), transparent 70%),
+    radial-gradient(35% 45% at 80% 20%, oklch(0.78 0.14 75 / 0.16), transparent 70%),
+    radial-gradient(45% 55% at 60% 85%, oklch(0.6 0.18 25 / 0.10), transparent 70%);
+}
+@keyframes aurora-drift {
+  0%   { transform: translate3d(0,0,0) rotate(0deg); }
+  100% { transform: translate3d(2%, -2%, 0) rotate(8deg); }
+}
+
+/* ── Glassmorphism ─────────────────────────────────────────────────────── */
+.glass {
+  background: oklch(1 0 0 / 0.6);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid oklch(1 0 0 / 0.4);
+}
+.dark .glass {
+  background: oklch(0.21 0.02 200 / 0.55);
+  border: 1px solid oklch(1 0 0 / 0.08);
+}
+.glass-strong {
+  background: oklch(1 0 0 / 0.78);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid oklch(1 0 0 / 0.5);
+}
+.dark .glass-strong {
+  background: oklch(0.21 0.02 200 / 0.72);
+  border: 1px solid oklch(1 0 0 / 0.12);
+}
+
+/* ── Glow utilities ────────────────────────────────────────────────────── */
+.glow-primary { box-shadow: 0 0 0 1px oklch(0.62 0.14 165 / 0.2), 0 8px 30px -8px oklch(0.62 0.14 165 / 0.35); }
+.glow-accent  { box-shadow: 0 0 0 1px oklch(0.78 0.14 75 / 0.25), 0 8px 30px -8px oklch(0.78 0.14 75 / 0.3); }
+.dark .glow-primary { box-shadow: 0 0 0 1px oklch(0.72 0.15 165 / 0.3), 0 8px 30px -8px oklch(0.72 0.15 165 / 0.4); }
+.dark .glow-accent  { box-shadow: 0 0 0 1px oklch(0.78 0.14 75 / 0.35), 0 8px 30px -8px oklch(0.78 0.14 75 / 0.35); }
+
+/* ── Brand-tinted elevation (real depth, not just color shift) ──────────── */
+.elevate-1 { box-shadow: 0 1px 2px oklch(0.18 0.02 200 / 0.04), 0 1px 3px oklch(0.18 0.02 200 / 0.06); }
+.elevate-2 { box-shadow: 0 2px 4px oklch(0.18 0.02 200 / 0.05), 0 4px 12px -2px oklch(0.62 0.14 165 / 0.08); }
+.elevate-3 { box-shadow: 0 4px 8px oklch(0.18 0.02 200 / 0.06), 0 12px 28px -6px oklch(0.62 0.14 165 / 0.14); }
+.elevate-4 { box-shadow: 0 8px 16px oklch(0.18 0.02 200 / 0.08), 0 24px 48px -10px oklch(0.62 0.14 165 / 0.20); }
+.dark .elevate-1 { box-shadow: 0 1px 2px oklch(0 0 0 / 0.4); }
+.dark .elevate-2 { box-shadow: 0 2px 4px oklch(0 0 0 / 0.5), 0 4px 12px -2px oklch(0 0 0 / 0.4); }
+.dark .elevate-3 { box-shadow: 0 4px 8px oklch(0 0 0 / 0.5), 0 12px 28px -6px oklch(0 0 0 / 0.55); }
+.dark .elevate-4 { box-shadow: 0 8px 16px oklch(0 0 0 / 0.55), 0 24px 48px -10px oklch(0 0 0 / 0.6); }
+/* Hover lift: shadow + slight translate, reduced-motion safe */
+.elevate-hover {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+.elevate-hover:hover {
+  transform: translateY(-2px);
+}
+.elevate-hover:hover.elevate-1 { box-shadow: 0 2px 4px oklch(0.18 0.02 200 / 0.05), 0 6px 16px -2px oklch(0.62 0.14 165 / 0.12); }
+.elevate-hover:hover.elevate-2 { box-shadow: 0 4px 8px oklch(0.18 0.02 200 / 0.06), 0 10px 24px -4px oklch(0.62 0.14 165 / 0.16); }
+.dark .elevate-hover:hover.elevate-1 { box-shadow: 0 2px 4px oklch(0 0 0 / 0.5), 0 6px 16px -2px oklch(0 0 0 / 0.5); }
+.dark .elevate-hover:hover.elevate-2 { box-shadow: 0 4px 8px oklch(0 0 0 / 0.55), 0 10px 24px -4px oklch(0 0 0 / 0.55); }
+
+/* ── Risk badge classes ────────────────────────────────────────────────── */
+.risk-low      { background: oklch(0.9 0.05 165); color: oklch(0.3 0.08 165); }
+.risk-medium   { background: oklch(0.9 0.08 75);  color: oklch(0.32 0.07 75); }
+.risk-high     { background: oklch(0.9 0.12 45);  color: oklch(0.35 0.1 45); }
+.risk-critical { background: oklch(0.88 0.16 25); color: oklch(0.95 0.04 25); }
+.dark .risk-low      { background: oklch(0.28 0.07 165); color: oklch(0.92 0.1 165); }
+.dark .risk-medium   { background: oklch(0.28 0.1 75);   color: oklch(0.94 0.12 75); }
+.dark .risk-high     { background: oklch(0.3 0.14 45);   color: oklch(0.95 0.13 45); }
+.dark .risk-critical { background: oklch(0.33 0.18 25);  color: oklch(0.96 0.05 25); }
+
+/* ── Severity rails — left border + tint for worklist triage at a glance ── */
+.rail-critical { border-left: 3px solid oklch(0.58 0.22 25); background: linear-gradient(90deg, oklch(0.58 0.22 25 / 0.07), transparent 60%); }
+.rail-high     { border-left: 3px solid oklch(0.7 0.16 45);  background: linear-gradient(90deg, oklch(0.7 0.16 45 / 0.06), transparent 60%); }
+.rail-medium   { border-left: 3px solid oklch(0.72 0.13 75); background: linear-gradient(90deg, oklch(0.72 0.13 75 / 0.06), transparent 60%); }
+.rail-low      { border-left: 3px solid oklch(0.62 0.14 165); background: linear-gradient(90deg, oklch(0.62 0.14 165 / 0.05), transparent 60%); }
+.dark .rail-critical { border-left: 3px solid oklch(0.68 0.2 25); background: linear-gradient(90deg, oklch(0.68 0.2 25 / 0.16), transparent 60%); }
+.dark .rail-high     { border-left: 3px solid oklch(0.78 0.16 45); background: linear-gradient(90deg, oklch(0.78 0.16 45 / 0.14), transparent 60%); }
+.dark .rail-medium   { border-left: 3px solid oklch(0.78 0.14 75); background: linear-gradient(90deg, oklch(0.78 0.14 75 / 0.12), transparent 60%); }
+.dark .rail-low      { border-left: 3px solid oklch(0.72 0.15 165); background: linear-gradient(90deg, oklch(0.72 0.15 165 / 0.12), transparent 60%); }
+
+/* ── Live pulse ring (for live indicators / critical attention) ─────────── */
+.live-pulse { position: relative; }
+.live-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 0 oklch(0.58 0.22 25 / 0.5);
+  animation: live-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+.dark .live-pulse::after { box-shadow: 0 0 0 0 oklch(0.68 0.2 25 / 0.55); }
+@keyframes live-ping {
+  0%   { box-shadow: 0 0 0 0 oklch(0.58 0.22 25 / 0.5); }
+  70%  { box-shadow: 0 0 0 8px oklch(0.58 0.22 25 / 0); }
+  100% { box-shadow: 0 0 0 0 oklch(0.58 0.22 25 / 0); }
+}
+.live-dot {
+  position: relative;
+  display: inline-block;
+}
+.live-dot::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 0 oklch(0.62 0.14 165 / 0.5);
+  animation: live-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+.dark .live-dot::before { box-shadow: 0 0 0 0 oklch(0.72 0.15 165 / 0.55); }
+
+/* ── Draw-in: sparkline/chart reveals left-to-right rather than snapping ── */
+.draw-in {
+  animation: draw-in 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes draw-in {
+  from { clip-path: inset(0 100% 0 0); opacity: 0.4; }
+  to   { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+
+/* ── Custom scrollbar ──────────────────────────────────────────────────── */
+.fancy-scroll { scrollbar-width: thin; scrollbar-color: oklch(0.62 0.14 165 / 0.4) transparent; }
+.fancy-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.fancy-scroll::-webkit-scrollbar-track { background: transparent; }
+.fancy-scroll::-webkit-scrollbar-thumb {
+  background: oklch(0.62 0.14 165 / 0.35);
+  border-radius: 9999px;
+}
+.fancy-scroll::-webkit-scrollbar-thumb:hover { background: oklch(0.62 0.14 165 / 0.6); }
+.dark .fancy-scroll { scrollbar-color: oklch(0.72 0.15 165 / 0.45) transparent; }
+.dark .fancy-scroll::-webkit-scrollbar-thumb { background: oklch(0.72 0.15 165 / 0.4); }
+
+/* ── Motion: respect prefers-reduced-motion ────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .elevate-hover:hover { transform: none !important; }
+  .draw-in { animation: none !important; clip-path: none !important; opacity: 1 !important; }
+  .live-pulse::after, .live-dot::before { animation: none !important; box-shadow: none !important; }
+}
+
+/* ── Sticky footer helper ────────────────────────────────────────────────
+   flex-direction: row so the <aside> sidebar (h-screen, w-64) sits BESIDE the
+   content column instead of stacking on top of it (which previously pushed the
+   entire dashboard ~100vh down, forcing a full-screen scroll before any cards
+   were visible). The content column's own flex-1 flex flex-col (topbar + main +
+   footer) handles the sticky-footer behavior inside the row. */
+.app-shell { min-height: 100vh; display: flex; flex-direction: row; }
+.app-shell > main { flex: 1 0 auto; }
+.app-shell > footer { flex-shrink: 0; }
+
+/* grid background pattern (existing — kept for backward compat) */
+.grid-pattern {
+  background-image:
+    linear-gradient(oklch(0.62 0.14 165 / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.62 0.14 165 / 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.dark .grid-pattern {
+  background-image:
+    linear-gradient(oklch(0.72 0.15 165 / 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.72 0.15 165 / 0.08) 1px, transparent 1px);
+}
+
+/* hero-grid — intentional, finer, fades radially into the aurora. Ties the
+   grid to the brand instead of being a stock dot-grid. */
+.hero-grid {
+  background-image:
+    linear-gradient(oklch(0.62 0.14 165 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.62 0.14 165 / 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: center top;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 30%, transparent 78%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 35%, #000 30%, transparent 78%);
+}
+.dark .hero-grid {
+  background-image:
+    linear-gradient(oklch(0.72 0.15 165 / 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.72 0.15 165 / 0.07) 1px, transparent 1px);
+}
+
+/* fine topographic dot field for section backgrounds (subtle, on-brand) */
+.dot-field {
+  background-image: radial-gradient(oklch(0.62 0.14 165 / 0.10) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%);
+}
+.dark .dot-field {
+  background-image: radial-gradient(oklch(0.72 0.15 165 / 0.14) 1px, transparent 1px);
+}
+
+/* gradient text — used sparingly for the brand span in section titles */
+.text-gradient-primary {
+  background: linear-gradient(120deg, oklch(0.62 0.14 165), oklch(0.7 0.13 75));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.dark .text-gradient-primary {
+  background: linear-gradient(120deg, oklch(0.78 0.15 165), oklch(0.82 0.14 75));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* hairline divider with a brand tint */
+.hr-brand {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, oklch(0.62 0.14 165 / 0.25), transparent);
+}
+.dark .hr-brand {
+  background: linear-gradient(90deg, transparent, oklch(0.72 0.15 165 / 0.3), transparent);
+}
+
+/* ── Print: hide app chrome, expand summary content ────────────────────── */
+@media print {
+  /* Hide sidebar (desktop + mobile drawer), topbars, footer */
+  .app-shell > aside,
+  .app-shell > .fixed,
+  .app-shell > div > header,
+  .app-shell > div > footer { display: none !important; }
+  /* Remove main padding + max-width so the summary fills the page */
+  .app-shell main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+  /* White background, black text for print */
+  body, .app-shell { background: #fff !important; }
+  .glass, .glass-strong {
+    background: #fff !important;
+    backdrop-filter: none !important;
+    border-color: #e5e5e5 !important;
+    box-shadow: none !important;
+  }
+  /* Avoid breaking cards across pages */
+  .print\:break-inside-avoid { break-inside: avoid; }
+  /* Color adjustments so colored text is readable on white */
+  .text-muted-foreground { color: #555 !important; }
+  .risk-critical { background: #fee2e2 !important; color: #991b1b !important; }
+  .risk-high { background: #fef3c7 !important; color: #92400e !important; }
+  .risk-medium { background: #d1fae5 !important; color: #065f46 !important; }
+  .risk-low { background: #f1f5f9 !important; color: #475569 !important; }
+}

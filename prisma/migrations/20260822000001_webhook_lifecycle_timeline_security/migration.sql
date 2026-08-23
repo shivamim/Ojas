@@ -1,0 +1,17 @@
+-- Migration: webhook_lifecycle_timeline_security
+--
+-- Historical incremental migration (already applied to production Supabase).
+-- Added the WebhookEvent lifecycle model + TimelineShare security hardening
+-- (tokenHash, active, revokedAt, revokedBy) + timeline security additions.
+--
+-- NOTE: This migration's schema changes are already reflected in the cumulative
+-- 20260101000000_init migration.sql (which represents the full current production
+-- schema state). This file exists to preserve the complete migration history so
+-- `prisma migrate deploy` recognizes the full applied history on the production
+-- database. On a fresh database the init migration creates the full schema; this
+-- file is a no-op.
+--
+-- WebhookEvent lifecycle states: RECEIVED → PROCESSING → PROCESSED / FAILED_RETRYABLE / FAILED_PERMANENT
+-- TimelineShare security: tokenHash (SHA-256), active, revokedAt, revokedBy
+
+-- No SQL to execute (already in cumulative schema).

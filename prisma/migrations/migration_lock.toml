@@ -1,0 +1,3 @@
+# Prisma migration lock for Ojas (PostgreSQL).
+# Do NOT edit — this ensures migration consistency across environments.
+provider = "postgresql"

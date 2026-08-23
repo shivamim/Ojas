@@ -1,0 +1,1469 @@
+// Ojas — multi-tenant SaaS for hospital patient post-discharge care.
+// Schema organized by owning "service" (core / ai / comms) using model-name
+// prefixes to mimic the three-schema split from the architecture spec.
+// SQLite is used in this sandbox; production would use Supabase Postgres.
+//
+// DPDP Compliance: ConsentRecord, BreachNotification, PII encryption on
+// sensitive fields. NABH Alignment: FollowUpPlan, DischargeSummary fields,
+// high-alert medication flagging, escalation timing, grievance tracking,
+// accreditation enum, quality indicator tagging.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url        = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CORE schema — owned by Core API. System of record.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  HOSPITAL_ADMIN
+  COORDINATOR
+  DOCTOR
+}
+
+enum PlanTier {
+  STARTER   // Deprecated — only kept for legacy rows. New signups go to PILOT.
+  PILOT     // 30-day free pilot, 25-patient cap. Auto-converts to GROWTH or suspends.
+  GROWTH    // ₹14,999/mo, 500 patients
+  ENTERPRISE // Custom, 5,000 patients
+}
+
+enum FamilyLanguage {
+  HINGLISH
+  HINDI
+  ENGLISH
+  TAMIL
+  TELUGU
+  MARATHI
+  BENGALI
+}
+
+enum FamilyUpdateType {
+  DAILY_RECOVERY
+  MEDICATION_REMINDER
+  APPOINTMENT_ALERT
+  ESCALATION_NOTICE
+  MILESTONE_ACHIEVED
+}
+
+enum DpdpRequestType {
+  ACCESS
+  CORRECTION
+  ERASURE
+  GRIEVANCE
+}
+
+enum DpdpRequestStatus {
+  PENDING
+  IN_REVIEW
+  FULFILLED
+  REJECTED
+}
+
+enum PilotStatus {
+  ACTIVE
+  COMPLETED
+  SUSPENDED
+}
+
+enum AiProvider {
+  GROQ
+  BEDROCK
+  RULE_BASED
+}
+
+enum PatientStatus {
+  ENROLLED
+  ACTIVE
+  RECOVERED
+  READMITTED
+  LOST_TO_FOLLOWUP
+}
+
+// N3: Loss-to-follow-up reason codes — specific reasons for LOST_TO_FOLLOWUP status
+enum LostToFollowupReason {
+  UNREACHABLE
+  REFUSED
+  TRANSFERRED
+  DECEASED
+}
+
+enum EscalationStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum EscalationSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// N7: Escalation type — CLINICAL (default) or GRIEVANCE for non-clinical complaints
+enum EscalationType {
+  CLINICAL
+  GRIEVANCE
+}
+
+enum CheckinStatus {
+  SCHEDULED
+  SENT
+  ANSWERED
+  MISSED
+}
+
+// N9: Accreditation level as structured enum (was free-text nabhLevel on Hospital)
+enum NabhAccreditationLevel {
+  ENTRY_LEVEL
+  FULL_6TH_EDITION
+  PRE_ACCREDITATION
+  NOT_ACCREDITED
+}
+
+// N5: High-alert medication category for flagging anticoagulants, insulin, opioids
+enum MedicationAlertCategory {
+  STANDARD
+  HIGH_ALERT
+}
+
+model Hospital {
+  id            String     @id @default(cuid())
+  name          String
+  slug          String     @unique
+  code          String?    @unique
+  email         String?
+  phone         String?
+  address       String?
+  isActive      Boolean    @default(true)
+  planTier      PlanTier   @default(STARTER)
+  bedCount      Int        @default(0)
+  nabhLevel     String?    // Legacy free-text field — retained for backward compatibility, superseded by nabhAccreditationLevel
+  nabhAccreditationLevel NabhAccreditationLevel @default(NOT_ACCREDITED) // N9: Structured enum
+  country       String     @default("India")
+  city          String?
+  hfrId         String?    // Health Facility Registry ID — referenced by readiness route
+  pmjayFacilityId String?  // PM-JAY facility ID — referenced by readiness route
+  deletedAt     DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  settings      HospitalSettings?
+  users         User[]
+  patients      Patient[]
+  subscriptions Subscription[]
+  invites       Invite[]
+  auditLogs     AuditLog[]
+  aiRuns        AiAgentRun[]
+  messages      Message[]
+  checkins      Checkin[]
+  escalations   Escalation[]
+  timelineEvents TimelineEvent[]
+  surveys       SatisfactionSurvey[]
+  medications   Medication[]
+  milestones    Milestone[]
+  pathways      CarePathwayTemplate[]
+  checklists    DischargeChecklist[]
+  consentRecords ConsentRecord[]
+  breachNotifications BreachNotification[]
+  followUpPlans FollowUpPlan[]
+  dischargeSummaries DischargeSummaryRecord[]
+  // ── New P0/P1/P2 relations ───────────────────────────────────────────────
+  familyUpdates     FamilyUpdate[]
+  timelineShares    TimelineShare[]
+  dpdpRequests      DpdpRequest[]
+  pilotStudy        PilotStudy?
+  integrationProfile HospitalIntegrationProfile?
+  // ── Integration models (added by Task 2-schema) ────────────────────────
+  abhaIdentities         AbhaIdentity[]
+  nhcxClaims             NhcxClaim[]
+  nhcxCoverageEligibilities NhcxCoverageEligibility[]
+  nhcxCommunications     NhcxCommunication[]
+  externalTransactions   ExternalTransaction[]
+  nabhEvidences          NabhEvidence[]
+  normalizedClaims       NormalizedClaim[]
+  pmjayBeneficiaries     PmjayBeneficiary[]
+  pmjayClaims            PmjayClaim[]
+  pmjayPreauths          PmjayPreauth[]
+  pmjayDocuments         PmjayDocument[]
+  pmjayQueries           PmjayQuery[]
+  pmjayPackages          PmjayPackage[]
+  claimDocumentRequirements ClaimDocumentRequirement[]
+  payerProfiles          PayerProfile[]
+  webhookEvents          WebhookEvent[]
+}
+
+model HospitalSettings {
+  id                 String   @id @default(cuid())
+  hospitalId         String   @unique
+  hospital           Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  recoveryWindowDays Int      @default(14)
+  checkinCadenceHours Int     @default(24)
+  whatsappEnabled    Boolean  @default(false)
+  emailDigestEnabled Boolean  @default(true)
+  aiTriageEnabled    Boolean  @default(true)
+  notificationPreferences String @default("{\"emailDailyDigest\":true,\"whatsappDeliveryReports\":false,\"escalationAlerts\":true,\"checkinReminders\":true}")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model User {
+  id              String       @id @default(cuid())
+  email           String       @unique
+  name            String
+  role            Role         @default(COORDINATOR)
+  passwordHash    String
+  forceReset      Boolean      @default(false)
+  isActive        Boolean      @default(true)
+  sessionToken    String?      @unique
+  hospitalId      String?
+  hospital        Hospital?    @relation(fields: [hospitalId], references: [id])
+  sessions        Session[]
+  auditLogs       AuditLog[]
+  invitesCreated  Invite[]     @relation("InviteCreator")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String @unique
+  familyId       String
+  userAgent      String?
+  ip             String?
+  createdAt      DateTime @default(now())
+  revokedAt      DateTime?
+  lastUsedAt     DateTime @default(now())
+}
+
+model Invite {
+  id           String   @id @default(cuid())
+  email         String
+  role          Role
+  token         String   @unique
+  hospitalId    String
+  hospital      Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  invitedBy     String
+  inviter       User     @relation("InviteCreator", fields: [invitedBy], references: [id])
+  acceptedAt    DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+}
+
+// PII: mobile number + nextOfKinContact stored encrypted (AES-256-GCM).
+// mobileHash is a deterministic SHA-256 lookup hash for webhook matching.
+// D4: Additional PII fields (addressEncrypted, nextOfKinContactEncrypted) 
+// encrypted the same way as mobile. D6: Data minimization — each field has a 
+// documented, specific purpose.
+model Patient {
+  id              String        @id @default(cuid())
+  hospitalId      String
+  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  fullName        String        // Required: patient identification at enrollment
+  age             Int           // Required: clinical risk stratification
+  gender          String        // Required: clinical risk stratification
+  mobileEncrypted String        // PII encrypted — WhatsApp check-in delivery
+  mobileHash      String        @unique // Deterministic lookup hash for webhook matching
+  // D4: Additional encrypted PII fields — address and next-of-kin contact
+  // receive the same AES-256-GCM treatment as mobile numbers
+  addressEncrypted String?      // PII encrypted — for follow-up coordination and transport
+  nextOfKinContactEncrypted String? // PII encrypted — emergency escalation contact
+  nextOfKinName   String?       // Name of emergency contact (not PII-sensitive)
+  // N4: Two-identifier patient matching — UHID (Unique Hospital ID) as second identifier
+  uhid            String?       // Hospital's unique patient ID — second identifier alongside name+mobile
+  dateOfBirth     DateTime?     // N4: Alternative second identifier (DOB)
+  surgeryType     String        // Required: determines care pathway template
+  surgeryDate     DateTime      // Required: recovery timeline anchor
+  dischargeDate   DateTime      // Required: recovery timeline anchor
+  comorbidities   String?       // Clinical risk stratification
+  // N3: Loss-to-follow-up reason — populated when status changes to LOST_TO_FOLLOWUP
+  lostToFollowupReason LostToFollowupReason?
+  status          PatientStatus @default(ENROLLED)
+  dpdpaConsent    Boolean       @default(false) // D1: Legacy single-consent flag — superseded by ConsentRecord
+  consentAt       DateTime?     // Legacy timestamp — superseded by ConsentRecord.grantedAt
+  enrolledById    String
+  // ── P0.2: Family Recovery Companion fields ──────────────────────────────
+  // Family contact (son/daughter/spouse) — encrypted same as mobile.
+  familyContactEncrypted String?
+  familyContactHash      String? // SHA-256 lookup hash for inbound WhatsApp replies
+  familyLanguage         FamilyLanguage @default(HINGLISH)
+  familyOptIn            Boolean @default(false) // Family opted in to daily updates
+  familyName             String? // Family member's name (not PII-sensitive)
+  familyRelation         String? // son | daughter | spouse | parent | other
+  // ── Soft delete (Audit gap fix) ─────────────────────────────────────────
+  // deletedAt preserves de-identified audit records; query filters must
+  // exclude deleted patients. Set by /api/patients/[id] DELETE.
+  deletedAt              DateTime?
+  // AI risk stratification (persisted from the Risk Stratification Agent)
+  riskLevel       String? // LOW | MEDIUM | HIGH | CRITICAL
+  riskScore       Int?    // 0-100
+  riskAssessedAt  DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  checkins        Checkin[]
+  escalations     Escalation[]
+  timelineEvents  TimelineEvent[]
+  messages        Message[]
+  surveys         SatisfactionSurvey[]
+  medications     Medication[]
+  milestones      Milestone[]
+  checklists      DischargeChecklist[]
+  consentRecords  ConsentRecord[]
+  followUpPlans   FollowUpPlan[]
+  dischargeSummary DischargeSummaryRecord?
+  familyUpdates   FamilyUpdate[]
+  timelineShares  TimelineShare[]
+  dpdpRequests    DpdpRequest[]
+  // ── Integration back-relations (added by Task 2-schema) ──────────────
+  abhaIdentity         AbhaIdentity?
+  nhcxClaims             NhcxClaim[]
+  nhcxCoverageEligibilities NhcxCoverageEligibility[]
+  nhcxCommunications     NhcxCommunication[]
+  externalTransactions   ExternalTransaction[]
+  normalizedClaims       NormalizedClaim[]
+  pmjayBeneficiaries     PmjayBeneficiary[]
+  pmjayClaims            PmjayClaim[]
+  pmjayPreauths          PmjayPreauth[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D1: Consent Record — purpose-specific, revocable consent tracking per DPDP 2025.
+// Each consent is for a single purpose (e.g. whatsapp_monitoring, ai_triage,
+// data_sharing_hospital). Consent can be revoked independently per purpose.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ConsentRecord {
+  id                 String   @id @default(cuid())
+  patientId          String
+  patient            Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  hospitalId         String
+  hospital           Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  purpose            String   // e.g. "whatsapp_monitoring", "ai_triage", "data_sharing_hospital", "data_sharing_insurance"
+  consentTextVersion String   // Version of the consent text shown, for audit trail
+  grantedAt          DateTime @default(now())
+  revokedAt          DateTime? // Null = currently consented; set to revoke
+  ip                 String?  // IP address of the consenting party
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D3: Breach Notification — DPDP Rules require notifying affected data
+// principals within 72 hours of a breach. This model stores ready-to-fire
+// notification templates and a documented trigger process.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model BreachNotification {
+  id                String   @id @default(cuid())
+  hospitalId        String
+  hospital          Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  title             String   // Plain-language description of the breach
+  description       String   // What data was exposed
+  affectedDataTypes String   // e.g. "mobile_numbers,addresses" — categories of PII exposed
+  protectiveSteps   String   // What steps affected individuals should take
+  contactPoint      String   // Contact person/email for this breach
+  detectedAt        DateTime // When the breach was detected
+  notifiedAt        DateTime? // When affected individuals were notified (null = not yet sent)
+  status            String   @default("DRAFT") // DRAFT | PENDING_APPROVAL | SENT
+  approvedById      String?  // Who approved sending the notification
+  // ── P2.8: DPDP 72-hour breach clock ─────────────────────────────────────
+  // slaDeadline = detectedAt + 72h. dpbNotifiedAt = when Data Protection Board
+  // was notified (separate from notifying affected individuals).
+  slaDeadline       DateTime? // detectedAt + 72 hours
+  dpbNotifiedAt     DateTime? // When the DPB was notified (DPDP Rule)
+  affectedCount     Int?      // Number of affected individuals
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// N1/N2: Discharge Summary as a structured record (NABH COP.6c alignment).
+// Captures diagnosis, procedures, medications on discharge, follow-up
+// instructions, and condition at discharge. Separate from the Patient model
+// to allow versioning and structured data retrieval.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DischargeSummaryRecord {
+  id                    String   @id @default(cuid())
+  hospitalId            String
+  hospital              Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId             String   @unique
+  patient               Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  // N1: Standard discharge summary structure per NABH COP.6c
+  diagnosis             String   // Primary diagnosis at discharge
+  proceduresPerformed   String?  // Procedures performed during admission (JSON array)
+  medicationsOnDischarge String? // Medications at time of discharge (JSON array of {name, dosage, frequency})
+  followUpInstructions  String?  // Follow-up care instructions for the patient
+  conditionAtDischarge  String   // e.g. "Stable", "Improved", "Critical"
+  dietaryInstructions   String?  // Dietary advice for recovery
+  activityRestrictions  String?  // Activity restrictions (e.g., "No heavy lifting for 6 weeks")
+  warningSigns          String?  // Signs that should prompt immediate medical attention
+  emergencyContact      String?  // Emergency contact number provided to patient
+  attendingDoctorName   String?  // Name of the attending physician
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// N2: Follow-up Plan as a first-class record, linked to discharge.
+// Instead of inferring from check-in cadence, this captures the planned
+// follow-up date, mode, and responsible clinician explicitly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FollowUpPlan {
+  id                  String   @id @default(cuid())
+  hospitalId          String
+  hospital            Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId           String
+  patient             Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  plannedDate         DateTime // When the follow-up is scheduled
+  mode                String   // CALL | WHATSAPP | IN_PERSON | TELECONSULT
+  responsibleClinician String? // Name/ID of the clinician responsible
+  notes               String?  // Any specific instructions for the follow-up
+  status              String   @default("SCHEDULED") // SCHEDULED | COMPLETED | MISSED | CANCELLED
+  completedAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// Patient satisfaction survey at end of recovery window. Real data —
+// collected from patients after their recovery window closes.
+// N8: Maps to a recognized standardized instrument (Consumer Assessment of
+// Healthcare Providers and Systems — CAHPS-aligned).
+model SatisfactionSurvey {
+  id              String   @id @default(cuid())
+  hospitalId      String
+  hospital        Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId       String
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  overallRating   Int      // 1-5 stars
+  careQuality     Int?     // 1-5
+  communication   Int?     // 1-5
+  responsiveness  Int?     // 1-5
+  wouldRecommend  Boolean?
+  freeText        String?
+  collectedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@unique([patientId]) // one survey per patient
+}
+
+// Patient medication tracking. Prescribed meds at discharge, with adherence
+// status updated through check-ins. Real data — not a stub.
+// N5: isHighAlert flag for anticoagulants, insulin, opioids — these receive
+// distinct adherence tracking and alerting.
+model Medication {
+  id              String               @id @default(cuid())
+  hospitalId      String
+  hospital        Hospital             @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId       String
+  patient         Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  name            String
+  dosage          String
+  frequency       String
+  startDate       DateTime
+  endDate         DateTime?
+  status          String               @default("ACTIVE") // ACTIVE | COMPLETED | DISCONTINUED
+  // N5: High-alert medication flagging — anticoagulants, insulin, opioids
+  isHighAlert     Boolean              @default(false)
+  alertCategory   MedicationAlertCategory @default(STANDARD)
+  notes           String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+// Recovery milestone tracker. Key recovery events (first walk, wound check,
+// suture removal, etc.) with target dates and completion status.
+model Milestone {
+  id           String   @id @default(cuid())
+  hospitalId   String
+  hospital     Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type         String   // FIRST_WALK, WOUND_CHECK, SUTURE_REMOVAL, STAPLE_REMOVAL, DRESSING_CHANGE, PHYSIOTHERAPY, FOLLOW_UP, OTHER
+  label        String
+  targetDate   DateTime
+  completedAt  DateTime?
+  status       String   @default("PENDING") // PENDING | COMPLETED | MISSED
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Discharge checklist — items to verify before/at discharge. Created at
+// enrollment from a default set, can be checked off by coordinators.
+model DischargeChecklist {
+  id          String   @id @default(cuid())
+  hospitalId  String
+  hospital    Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  item        String
+  category    String   // DISCHARGE_SUMMARY, MEDICATION_REVIEW, FOLLOW_UP_BOOKED, TRANSPORT, FAMILY_BRIEFED, DPDPA_CONSENT, OTHER
+  checked     Boolean  @default(false)
+  checkedAt   DateTime?
+  checkedById String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Checkin {
+  id           String        @id @default(cuid())
+  hospitalId   String
+  hospital     Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId    String
+  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  scheduledFor DateTime
+  sentAt       DateTime?
+  answeredAt   DateTime?
+  status       CheckinStatus @default(SCHEDULED)
+  painLevel    Int?
+  temperature  Float?
+  symptomsText String?
+  freeText     String?
+  // Medication adherence — did the patient confirm taking their meds?
+  medsTaken    Boolean?
+  medsNote     String?
+  aiRiskScore  Float?
+  aiRiskLevel  String?
+  aiRationale  String?
+  aiRunId      String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+// N6: Escalation with timing fields for SLA tracking.
+// N7: type field distinguishes CLINICAL escalations from GRIEVANCE complaints.
+model Escalation {
+  id              String             @id @default(cuid())
+  hospitalId      String
+  hospital        Hospital           @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId       String
+  patient         Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  checkinId       String?
+  severity        EscalationSeverity @default(LOW)
+  status          EscalationStatus   @default(OPEN)
+  // N7: Escalation type — CLINICAL (default) for medical escalations,
+  // GRIEVANCE for patient/family complaints with different SLA expectations
+  type            EscalationType     @default(CLINICAL)
+  reason          String
+  aiProposed      Boolean            @default(false)
+  aiConfidence    Float?
+  aiRationale     String?
+  assignedToId    String?
+  resolution      String?
+  // N6: Escalation timing fields for SLA measurement
+  acknowledgedAt  DateTime?          // When the escalation was first acknowledged by staff
+  resolvedAt      DateTime?          // When the escalation was actually resolved
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+}
+
+model TimelineEvent {
+  id          String   @id @default(cuid())
+  hospitalId  String
+  hospital    Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  eventType   String
+  title       String
+  detail      String?
+  actorId     String?
+  occurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  hospitalId  String?
+  hospital    Hospital? @relation(fields: [hospitalId], references: [id])
+  actorId     String?
+  actor       User?    @relation(fields: [actorId], references: [id])
+  action      String
+  target      String?
+  detail      String?
+  ip          String?
+  // ── Field-level audit (added by Task 2-schema) ────────────────────────
+  userId      String?
+  entityType  String?
+  entityId    String?
+  fieldPath   String?
+  oldValue    String?
+  newValue    String?
+  actorEmail  String?
+  actorRole   String?
+  requestId   String?
+  createdAt   DateTime @default(now())
+}
+
+model Subscription {
+  id            String   @id @default(cuid())
+  hospitalId    String
+  hospital      Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  planTier      PlanTier @default(STARTER)
+  patientLimit  Int      @default(50)
+  aiEnabled     Boolean  @default(true)
+  status        String   @default("active")
+  currentPeriodEnd DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI schema — owned by AI Agent Service. Every LLM call logged here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AiOutcome {
+  AUTO_APPLIED
+  PENDING_CONFIRMATION
+  CONFIRMED
+  OVERRIDDEN
+  FAILED
+  FALLBACK
+}
+
+model AiAgentRun {
+  id           String     @id @default(cuid())
+  hospitalId   String
+  hospital     Hospital   @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  agentType    String
+  promptRef    String
+  inputSummary String
+  output       String
+  tokensIn     Int        @default(0)
+  tokensOut    Int        @default(0)
+  latencyMs    Int        @default(0)
+  outcome      AiOutcome  @default(AUTO_APPLIED)
+  fallbackUsed Boolean    @default(false)
+  errorMessage String?
+  checkinId    String?
+  // ── P0.1: AI Inference Fallback — which provider served this run ─────────
+  provider     AiProvider @default(GROQ)
+  // ── P0.1: which provider was tried first vs. which served (for fallback audit)
+  primaryProvider  AiProvider @default(GROQ)
+  fallbackReason   String? // e.g. "timeout>2000ms", "5xx", "rate_limit"
+  createdAt    DateTime   @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMMS schema — owned by Communications Service.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum MessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum MessageChannel {
+  WHATSAPP
+  EMAIL
+  IN_APP
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  SENDING
+  RECONCILIATION_REQUIRED
+}
+
+model Message {
+  id          String           @id @default(cuid())
+  hospitalId  String
+  hospital    Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId   String?
+  patient     Patient?         @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  channel     MessageChannel   @default(WHATSAPP)
+  direction   MessageDirection @default(OUTBOUND)
+  toAddress   String
+  body        String
+  status      MessageStatus    @default(QUEUED)
+  checkinId   String?
+  // ── Provider message ID for inbound delivery/read receipt matching ──
+  providerMessageId String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+// Care pathway template — customizable milestone sets per surgery type.
+// Hospital admins can create/edit templates; enrollment auto-generates
+// milestones from the matching template (falling back to the built-in defaults).
+model CarePathwayTemplate {
+  id          String   @id @default(cuid())
+  hospitalId  String
+  hospital    Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  surgeryType String   // e.g. "Coronary Bypass" — matched at enrollment
+  name        String
+  description String?
+  milestones  String   // JSON array of {type, label, dayOffset}
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([hospitalId, surgeryType])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P0.2: FamilyUpdate — daily recovery updates sent to family members via
+// WhatsApp. Content is Hinglish/Hindi by default, driven by patient.familyLanguage.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FamilyUpdate {
+  id          String           @id @default(cuid())
+  patientId   String
+  hospitalId  String
+  content     String           // Hinglish/Hindi/etc message body
+  type        FamilyUpdateType @default(DAILY_RECOVERY)
+  status      MessageStatus    @default(QUEUED)
+  language    FamilyLanguage   @default(HINGLISH)
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  // P0 (#11): durable provider message ID — inbound delivery/read receipts
+  // match this FamilyUpdate row (the authoritative outbox record), NOT a
+  // secondary Message row that can be silently lost.
+  providerMessageId String? @unique
+  // ── Sending lifecycle (added by Task 2-schema) ────────────────────────
+  claimedAt      DateTime?
+  claimedBy      String?
+  failedAt       DateTime?
+  failureReason  String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  patient     Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  hospital    Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@index([hospitalId, status])
+  @@index([patientId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P0.3: TimelineShare — short-lived, tokenised, read-only timeline links
+// for doctors/family. PII is redacted in the share payload. Expires in 7d.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model TimelineShare {
+  id          String    @id @default(cuid())
+  token       String    @unique @default(uuid())
+  tokenHash   String    @unique
+  patientId   String
+  hospitalId  String
+  audience    String    @default("DOCTOR") // DOCTOR | FAMILY | COORDINATOR
+  expiresAt   DateTime
+  accessedAt  DateTime?
+  ipAddress   String?
+  createdById String?
+  active      Boolean   @default(true)
+  revokedAt   DateTime?
+  revokedBy   String?
+  createdAt   DateTime  @default(now())
+
+  patient     Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  hospital    Hospital  @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P2.8: ConsentVersion — versioned consent text. Hash proves what was shown
+// to the patient at consent time. When text changes, require re-consent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ConsentVersion {
+  id          String   @id @default(cuid())
+  purpose     String   // whatsapp_monitoring | ai_triage | data_sharing_hospital | data_sharing_insurance
+  version     String   // e.g. "1.0", "1.1"
+  content     String   // Full consent text shown to patient
+  hash        String   // SHA-256 of content — proves what was displayed
+  effectiveAt DateTime @default(now())
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  @@unique([purpose, version])
+  @@index([purpose, effectiveAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P2.8: DpdpRequest — Data Principal requests under DPDP 2023.
+// ACCESS (30d SLA), CORRECTION (30d SLA), ERASURE (no SLA), GRIEVANCE (no SLA).
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DpdpRequest {
+  id          String           @id @default(cuid())
+  hospitalId  String
+  patientId   String
+  type        DpdpRequestType
+  status      DpdpRequestStatus @default(PENDING)
+  description String?           // Free-text request from data principal
+  response    String?           // DPO's response / resolution note
+  slaDeadline DateTime?         // requestedAt + 30d for ACCESS/CORRECTION
+  requestedAt DateTime         @default(now())
+  resolvedAt  DateTime?
+  resolvedById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  patient     Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  hospital    Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@index([hospitalId, status])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P1.7: PilotStudy — clinical validation tracker. One per hospital.
+// Captures readmission rate with/without Ojas, medication adherence, satisfaction.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PilotStudy {
+  id                         String      @id @default(cuid())
+  hospitalId                 String      @unique
+  startDate                  DateTime    @default(now())
+  endDate                    DateTime?
+  patientCount               Int         @default(0)
+  controlCount               Int         @default(0) // historical/pre-Ojas cohort
+  status                     PilotStatus @default(ACTIVE)
+  // Outcome metrics — populated as data accrues
+  readmissionRateWithOjas    Float?
+  readmissionRateWithoutOjas Float?
+  medicationAdherenceRate    Float?
+  patientSatisfactionScore   Float?
+  responseRate               Float?     // % of check-ins answered
+  escalationCount            Int        @default(0)
+  notes                      String?
+  createdAt                  DateTime    @default(now())
+  updatedAt                  DateTime    @updatedAt
+
+  hospital                   Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+}
+
+// ─── Hospital Integration Profile (from production hardening) ──────────
+// Central configuration hub for all external system integrations.
+// HospitalIntegrationProfile is the canonical source of PM-JAY provider
+// mode for hospital-specific operations (overrides env default).
+
+enum PmjayProviderMode {
+  MANUAL_PORTAL
+  STATE_API
+  OFFICIAL_API
+  SANDBOX
+  LOCAL
+}
+
+enum HemStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum WasaAuditStatus {
+  NOT_STARTED
+  SCHEDULED
+  IN_PROGRESS
+  PASSED
+  FAILED
+  EXPIRED
+}
+
+enum ReadinessStatus {
+  MISSING
+  CONFIGURED
+  PENDING_VERIFICATION
+  VERIFIED
+  EXPIRED
+  EXPIRING_SOON
+}
+
+model HospitalIntegrationProfile {
+  id         String   @id @default(cuid())
+  hospitalId String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // ── Core Facility ──
+  hfrId               String?              // Health Facility Registry ID
+  pmjayFacilityId     String?              // PM-JAY empanelment / facility ID
+  shaCode             String?              // State Health Agency code (legacy name)
+  stateHealthAgencyCode String?            // State Health Agency code (zero-code onboarding name)
+  hemStatus           HemStatus?           @default(NOT_STARTED)
+  hemLinked           Boolean?             // HEM integration linked
+
+  // ── ABDM / NHA Readiness ──
+  wasaAuditStatus     WasaAuditStatus?     @default(NOT_STARTED)
+  wasaAuditDate       DateTime?
+  safeToHostCertRef   String?              // Safe-to-Host certificate reference (legacy name)
+  safeToHostCertificateRef String?         // Safe-to-Host certificate reference (zero-code onboarding name)
+  certExpiryDate      DateTime?            // Certificate expiry (legacy name)
+  certificateExpiryDate DateTime?           // Certificate expiry (zero-code onboarding name)
+  certificationStatus String?              // Certification status label
+
+  // ── ABDM / ABHA modes ──
+  abdmMode            String?              // SANDBOX | PRODUCTION_PENDING | LIVE
+  abhaMode            String?              // SANDBOX | PRODUCTION_PENDING | LIVE
+  hfrVerified         Boolean   @default(false)
+  pmjayEmpanelmentVerified Boolean @default(false)
+  ojasFacilityMappingComplete Boolean @default(false)
+  state               String?
+  district            String?
+  notes               String?
+
+  // ── NHCX ──
+  nhcxParticipantCode String?
+  nhcxMode            String?              // DISABLED | SANDBOX | SANDBOX_VERIFIED | PRODUCTION_PENDING_ONBOARDING | PRODUCTION_READY | LIVE | FAILED
+
+  // ── NHCX live-gating sequence (each gate is a real checklist item) ──
+  gateSandboxConfigured            Boolean @default(false)
+  gateSandboxVerified              Boolean @default(false)
+  gatePartnerOnboardingVerified    Boolean @default(false)
+  gateCertificatesVerified         Boolean @default(false)
+  gateProductionEndpointVerified   Boolean @default(false)
+  gateProductionConnectivityVerified Boolean @default(false)
+  gateLiveApproved                  Boolean @default(false)
+  sandboxConfiguredAt              DateTime?
+  sandboxVerifiedAt                DateTime?
+  productionOnboardingStartedAt    DateTime?
+  productionReadyAt                DateTime?
+  liveApprovedAt                   DateTime?
+
+  // ── PM-JAY Provider Mode ──
+  // When set, this OVERRIDES the global PMJAY_PROVIDER_MODE env var
+  // for all hospital-specific PM-JAY operations.
+  pmjayMode           PmjayProviderMode?
+
+  // ── Readiness tracking ──
+  overallReadiness    String?              @default("NOT_READY")
+  readinessLastEval   DateTime?
+
+  // ── Relations ──
+  hospital   Hospital  @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@index([hospitalId])
+  @@index([pmjayMode])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Integration models (added by Task 2-schema) — referenced by the ABDM/NHCX/
+// PM-JAY/NABH/webhook integration routes. Each model is hospital + patient
+// scoped where appropriate and stores truthful provenance metadata
+// (environment state, source, isAuthoritative) so sandbox/local results can
+// NEVER be confused with LIVE_EXTERNAL results in billing/claims workflows.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ABDM M1: ABHA identity for a patient. State machine:
+// NOT_LINKED → DISCOVERED → OTP → VERIFIED → LINKED + MANUALLY_RECORDED.
+// Truthful provenance: isAuthoritative=false for sandbox/manual; only
+// LIVE_EXTERNAL verification is authoritative for billing.
+model AbhaIdentity {
+  id                       String    @id @default(cuid())
+  hospitalId               String?
+  patientId                String?   @unique
+  abhaNumber               String?
+  abhaAddress              String?
+  verificationStatus       String    // NOT_LINKED | DISCOVERED | OTP | VERIFIED | KYC_VERIFIED | LINKED | MANUALLY_RECORDED
+  verificationSource       String?   // LIVE_EXTERNAL | SANDBOX | MANUAL_UNVERIFIED | MANUAL_PORTAL
+  verificationOtpRef       String?
+  abdmOtpTxnId             String?
+  abdmResponseRaw          String?   // serialized JSON — full ABDM search response
+  isAuthoritative          Boolean   @default(false)
+  sandboxMode              Boolean   @default(false)
+  nameAsPerAbha            String?
+  genderAsPerAbha          String?
+  yearOfBirthAsPerAbha     Int?
+  verifiedAt               DateTime?
+  revokedAt                DateTime?
+  // P1 (#6): identity reconciliation result + override audit
+  reconciliationResult      String?  // MATCH | PARTIAL | MISMATCH
+  reconciliationOverrideReason String?
+  reconciliationTimestamp   DateTime?
+  reconciliationActor       String?
+  // Cached PM-JAY eligibility provenance — NEVER authoritative on its own.
+  pmjayEligible            Boolean?
+  pmjayEligibilitySource   String?  // LIVE | SANDBOX | LOCAL
+  pmjayVerifiedAt          DateTime?
+  pmjayFamilyId            String?
+  pmjayCardNo              String?
+  pmjayBalance             Decimal?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  hospital                 Hospital? @relation(fields: [hospitalId], references: [id])
+  patient                  Patient?  @relation(fields: [patientId], references: [id])
+  nhcxClaims               NhcxClaim[]
+  nhcxCoverageEligibilities NhcxCoverageEligibility[]
+  pmjayBeneficiaries       PmjayBeneficiary[]
+
+  @@index([hospitalId])
+  @@index([patientId])
+  @@index([abhaNumber])
+}
+
+// NHCX claim: state-machine-tracked FHIR claim with idempotency on
+// clientRequestId. SLA breach flags are set by the nhcx-sla-check cron.
+model NhcxClaim {
+  id                  String    @id @default(cuid())
+  hospitalId          String?
+  patientId           String?
+  abhaIdentityId      String?
+  claimId             String    @unique
+  clientRequestId     String    @unique
+  status              String    // DRAFT | PREAUTH_PENDING | CLAIM_SUBMITTED | ACKNOWLEDGED | UNDER_REVIEW | APPROVED | PARTIALLY_APPROVED | REJECTED | PAID | FAILED | WITHDRAWN
+  claimType           String    // PREAUTH | CLAIM
+  packageCode         String?
+  packageName        String?
+  estimatedAmount     Decimal?
+  approvedAmount      Decimal?
+  patientShare        Decimal?
+  sandboxMode         Boolean   @default(false)
+  integrationSource   String?   // LIVE | SANDBOX | BLOCKED_BY_EXTERNAL_ONBOARDING | MANUAL_PORTAL
+  submittedAt         DateTime?
+  preAuthDeadlineAt   DateTime?
+  finalAuthDeadlineAt DateTime?
+  preAuthBreached     Boolean   @default(false)
+  finalAuthBreached   Boolean   @default(false)
+  fhirClaimBundleRef  String?   // complete FHIR bundle JSON OR a storage URI
+  fhirPreauthResponse String?
+  fhirClaimResponse   String?
+  rejectionReason     String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  hospital            Hospital?       @relation(fields: [hospitalId], references: [id])
+  patient             Patient?        @relation(fields: [patientId], references: [id])
+  abhaIdentity        AbhaIdentity?   @relation(fields: [abhaIdentityId], references: [id])
+  externalTransactions ExternalTransaction[]
+  communications      NhcxCommunication[]
+
+  @@index([hospitalId])
+  @@index([patientId])
+  @@index([status])
+}
+
+// NHCX Coverage Eligibility — FHIR R4 CoverageEligibilityRequest. Stored
+// COMPLETE (never truncated) with a SHA-256 hash for retrieval integrity.
+model NhcxCoverageEligibility {
+  id                   String    @id @default(cuid())
+  hospitalId           String?
+  patientId            String?
+  abhaIdentityId       String?
+  clientRequestId     String    @unique
+  status               String    // DRAFT | SUBMITTED | ACKNOWLEDGED | FAILED
+  payerId              String
+  providerFacilityId   String
+  serviceType          String?
+  eligible             Boolean?
+  eligibleAmount       Float?
+  fhirRequest          String?   // complete FHIR request bundle JSON
+  fhirRequestHash      String?
+  fhirResponse         String?   // complete FHIR response JSON
+  fhirResponseHash     String?
+  fhirProfileVersion   String?
+  environmentState     String?   // DISABLED | SANDBOX | SANDBOX_VERIFIED | PRODUCTION_PENDING_ONBOARDING | PRODUCTION_READY | LIVE | MANUAL_PORTAL
+  source               String?   // LIVE_EXTERNAL | SANDBOX | LOCAL_RECORD | MANUAL_PORTAL
+  isAuthoritative      Boolean   @default(false)
+  submittedAt          DateTime?
+  respondedAt          DateTime?
+  error                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  hospital             Hospital?      @relation(fields: [hospitalId], references: [id])
+  patient              Patient?       @relation(fields: [patientId], references: [id])
+  abhaIdentity         AbhaIdentity?  @relation(fields: [abhaIdentityId], references: [id])
+  communications       NhcxCommunication[]
+
+  @@index([hospitalId])
+  @@index([patientId])
+}
+
+// NHCX Communication — query/clarification/document-request/response FHIR
+// Communication resource. Linked to a claim OR a coverage eligibility.
+model NhcxCommunication {
+  id                       String    @id @default(cuid())
+  hospitalId               String?
+  patientId                String?
+  claimId                  String?
+  coverageEligibilityId    String?
+  clientRequestId          String    @unique
+  type                     String    // QUERY | CLARIFICATION | DOCUMENT_REQUEST | RESPONSE | ACKNOWLEDGEMENT
+  subject                  String?
+  payload                  String?   // serialized FHIR Communication resource JSON
+  payloadHash              String?
+  senderId                 String
+  receiverId               String
+  status                   String    // DRAFT | SUBMITTED | ACKNOWLEDGED | FAILED
+  environmentState         String?
+  source                   String?   // LIVE_EXTERNAL | SANDBOX | LOCAL_RECORD
+  isAuthoritative          Boolean   @default(false)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  hospital                 Hospital?              @relation(fields: [hospitalId], references: [id])
+  patient                  Patient?               @relation(fields: [patientId], references: [id])
+  claim                    NhcxClaim?             @relation(fields: [claimId], references: [id])
+  coverageEligibility      NhcxCoverageEligibility? @relation(fields: [coverageEligibilityId], references: [id])
+
+  @@index([hospitalId])
+  @@index([patientId])
+  @@index([claimId])
+}
+
+// External transaction record for manual-portal NHCX/PM-JAY submissions.
+// Used to record the official external reference when the operator submits
+// through the external portal (not via direct API integration). Idempotent on
+// (integration, externalTransactionId, hospitalId).
+model ExternalTransaction {
+  id                       String    @id @default(cuid())
+  hospitalId               String?
+  patientId                String?
+  claimId                  String?   // references NhcxClaim.id (or PmjayClaim.id) — kept loose to avoid model coupling
+  integration              String    // NHCX_CLAIM | NHCX_COVERAGE_ELIGIBILITY | PMJAY_CLAIM | PMJAY_PREAUTH
+  payer                    String?
+  environment               String    // MANUAL_PORTAL | LIVE | SANDBOX
+  status                   String    // COMPLETED | FAILED | PENDING
+  externalTransactionId    String    // official external reference — REQUIRED
+  externalReference        String?   // the Ojas-side claimId this txn belongs to
+  submittedAt              DateTime?
+  acknowledgedAt           DateTime?
+  completedAt              DateTime?
+  responseHash             String?
+  rawResponse              String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  hospital                 Hospital?  @relation(fields: [hospitalId], references: [id])
+  patient                  Patient?   @relation(fields: [patientId], references: [id])
+  claim                    NhcxClaim? @relation(fields: [claimId], references: [id])
+
+  @@index([hospitalId])
+  @@index([patientId])
+  @@index([integration, externalTransactionId])
+}
+
+// NABH readiness evidence record. Status NOT_ASSESSED → GAP/PARTIAL →
+// EVIDENCE_PENDING → SUBMITTED → VERIFIED → EXPIRED/REQUIRES_REVIEW.
+// Positioned as a readiness/evidence/gap-management tool — NOT accreditation.
+model NabhEvidence {
+  id                  String    @id @default(cuid())
+  hospitalId          String?
+  standardCode        String    // e.g. "COP.6c"
+  category            String    // Core | Commitment | Achievement | Excellence
+  evidenceSource      String?   // AUTO_GENERATED | MANUAL | HOSPITAL_ATTESTED | EXTERNALLY_VERIFIED
+  status              String    // NOT_ASSESSED | GAP | PARTIAL | EVIDENCE_PENDING | SUBMITTED | VERIFIED | EXPIRED | REQUIRES_REVIEW
+  title               String
+  description         String?
+  fileUrl             String?
+  fileName            String?
+  fileSize            Int?
+  fileMimeType        String?
+  autoCount           Int?
+  expiresAt           DateTime?
+  gapDescription      String?
+  correctiveAction    String?
+  correctiveOwner     String?
+  correctiveDueDate   DateTime?
+  comments            String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  hospital            Hospital? @relation(fields: [hospitalId], references: [id])
+
+  @@index([hospitalId])
+  @@index([status])
+}
+
+// Payer-agnostic normalized claim. Used by the completeness engine to evaluate
+// a claim across payers (PM-JAY via NHCX, private payer, etc.). Stores the
+// computed completeness result for UI surfacing.
+model NormalizedClaim {
+  id                       String    @id @default(cuid())
+  hospitalId               String?
+  patientId                String?
+  payerProfileId          String?
+  routedVia                String?   // NHCX | MANUAL_PORTAL | PAYER_DIRECT
+  diagnosis                String?
+  packageCode              String?
+  admissionDate            DateTime?
+  dischargeDate            DateTime?
+  claimedAmount            Decimal?
+  completenessStatus      String?   // READY | BLOCKED | ACTION_REQUIRED
+  completenessMissingItems String?   // serialized JSON { missingItems, actionItems }
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  hospital                 Hospital?     @relation(fields: [hospitalId], references: [id])
+  patient                  Patient?      @relation(fields: [patientId], references: [id])
+  payerProfile             PayerProfile? @relation(fields: [payerProfileId], references: [id])
+
+  @@index([hospitalId])
+  @@index([patientId])
+}
+
+// Payer profile — payer configuration (NHCX-enabled flag, etc.). Used by
+// the completeness engine to validate routing prerequisites.
+model PayerProfile {
+  id            String    @id @default(cuid())
+  hospitalId    String?
+  payerCode     String
+  payerName     String?
+  nhcxEnabled   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  hospital      Hospital?        @relation(fields: [hospitalId], references: [id])
+  claims        NormalizedClaim[]
+
+  @@index([hospitalId])
+}
+
+// PM-JAY beneficiary identification + verification row. Truthful provenance:
+// isAuthoritative=true ONLY for LIVE_EXTERNAL or operator-confirmed MANUAL_PORTAL.
+// SANDBOX/LOCAL are NEVER authoritative. Drives the billing gate.
+model PmjayBeneficiary {
+  id                    String    @id @default(cuid())
+  hospitalId            String?
+  patientId             String?
+  abhaIdentityId       String?
+  beneficiaryReference  String    // ration card / mobile-linked / PMJAY ref
+  verificationStatus    String    // IDENTIFIED | VERIFIED | KYC_VERIFIED | FAILED | REJECTED
+  verificationMethod    String?   // OTP | DEMOGRAPHIC | BIS | PORTAL
+  verificationSource    String    // LIVE_EXTERNAL | MANUAL_PORTAL | SANDBOX | LOCAL_RECORD
+  providerMode          String    // LIVE_API | STATE_API | MANUAL_PORTAL | SANDBOX | LOCAL
+  isAuthoritative       Boolean   @default(false)
+  externalTxnId         String?
+  rawResponse           String?
+  verifiedAt            DateTime?
+  failureReason         String?
+  // Part 28: PM-JAY domain fields — eligibility + inter-state portability + coverage
+  eligibilityCategory          String?  // STANDARD | SENIOR_CITIZEN_70_PLUS_UNIVERSAL | SENIOR_CITIZEN_TOPUP
+  isInterStatePortability      Boolean  @default(false)
+  homeState                    String?
+  treatmentState               String?
+  coveragePool                 String?  // BASE_FAMILY_FLOATER | SENIOR_CITIZEN_TOPUP
+  isSimulated                  Boolean  @default(false)
+  canUseForBilling             Boolean  @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  hospital              Hospital?     @relation(fields: [hospitalId], references: [id])
+  patient               Patient?      @relation(fields: [patientId], references: [id])
+  abhaIdentity          AbhaIdentity? @relation(fields: [abhaIdentityId], references: [id])
+  claims                PmjayClaim[]
+  preauths              PmjayPreauth[]
+
+  @@index([hospitalId])
+  @@index([patientId])
+}
+
+// PM-JAY pre-authorization packet. State machine:
+// DRAFT | DOCUMENTS_PENDING → SUBMITTED → APPROVED | REJECTED | RESOLVED.
+model PmjayPreauth {
+  id                String    @id @default(cuid())
+  hospitalId        String?
+  patientId         String?
+  beneficiaryId     String
+  packageId         String?
+  clientRequestId   String    @unique
+  status            String    // DRAFT | DOCUMENTS_PENDING | SUBMITTED | APPROVED | REJECTED | RESOLVED | FAILED
+  admissionDate     DateTime?
+  diagnosis         String?
+  documents         String?   // serialized JSON array of { type, name, storageRef }
+  packageAmount     Decimal?
+  estimatedAmount   Decimal?
+  providerMode      String?   // LIVE_API | STATE_API | MANUAL_PORTAL | SANDBOX | LOCAL
+  source            String?   // LIVE_EXTERNAL | MANUAL_PORTAL | SANDBOX | LOCAL_RECORD
+  isAuthoritative   Boolean   @default(false)
+  externalTxnId     String?
+  rawResponse       String?
+  submittedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  hospital          Hospital?        @relation(fields: [hospitalId], references: [id])
+  patient           Patient?         @relation(fields: [patientId], references: [id])
+  beneficiary       PmjayBeneficiary @relation(fields: [beneficiaryId], references: [id])
+  package           PmjayPackage?    @relation(fields: [packageId], references: [id])
+  claims            PmjayClaim[]
+
+  @@index([hospitalId])
+  @@index([patientId])
+  @@index([beneficiaryId])
+}
+
+// PM-JAY claim — full lifecycle from DRAFT through SETTLED. Linked to a
+// beneficiary, optional preauth, optional package. Decimal amounts for
+// claimed/approved/deduction/patientShare/settled.
+model PmjayClaim {
+  id                String    @id @default(cuid())
+  hospitalId        String?
+  patientId         String?
+  beneficiaryId     String
+  packageId         String?
+  preauthId         String?
+  clientRequestId   String    @unique
+  status            String    // DRAFT | DOCUMENTS_PENDING | SUBMITTED | ACKNOWLEDGED | UNDER_REVIEW | QUERY_OPEN | APPROVED | PARTIALLY_APPROVED | REJECTED | SETTLED | FAILED
+  dischargeDate     DateTime?
+  documents         String?   // serialized JSON array of { type, name, storageRef }
+  packageAmount     Decimal?
+  claimedAmount     Decimal?
+  approvedAmount    Decimal?
+  deductionAmount   Decimal?
+  patientShare      Decimal?
+  settledAmount     Decimal?
+  rejectionReason   String?
+  externalClaimId   String?
+  rawResponse       String?
+  settledAt         DateTime?
+  providerMode      String?   // LIVE_API | STATE_API | MANUAL_PORTAL | SANDBOX | LOCAL
+  source            String?   // LIVE_EXTERNAL | MANUAL_PORTAL | SANDBOX | LOCAL_RECORD
+  isAuthoritative   Boolean   @default(false)
+  queryReason       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  hospital          Hospital?        @relation(fields: [hospitalId], references: [id])
+  patient           Patient?         @relation(fields: [patientId], references: [id])
+  beneficiary       PmjayBeneficiary @relation(fields: [beneficiaryId], references: [id])
+  package           PmjayPackage?    @relation(fields: [packageId], references: [id])
+  preauth           PmjayPreauth?    @relation(fields: [preauthId], references: [id])
+  uploadedDocuments PmjayDocument[]
+  queries           PmjayQuery[]
+
+  @@index([hospitalId])
+  @@index([patientId])
+  @@index([beneficiaryId])
+  @@index([status])
+}
+
+// PM-JAY document — uploaded evidence attached to a claim. Verified flag
+// gates the completeness check.
+model PmjayDocument {
+  id                String    @id @default(cuid())
+  hospitalId        String?
+  pmjayClaimId      String
+  documentType      String
+  name              String?
+  storageRef        String?
+  verified          Boolean   @default(false)
+  verifiedAt        DateTime?
+  verifiedById      String?
+  rejectionReason   String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  hospital          Hospital?  @relation(fields: [hospitalId], references: [id])
+  claim             PmjayClaim @relation(fields: [pmjayClaimId], references: [id], onDelete: Cascade)
+
+  @@index([hospitalId])
+  @@index([pmjayClaimId])
+}
+
+// PM-JAY query / clarification / document-request workflow on a claim.
+// OPEN → RESPONSE_REQUIRED → RESPONSE_SUBMITTED → RESOLVED.
+model PmjayQuery {
+  id                String    @id @default(cuid())
+  hospitalId        String?
+  claimId           String
+  type              String    // QUERY | CLARIFICATION | DOCUMENT_REQUEST
+  status            String    // OPEN | RESPONSE_REQUIRED | RESPONSE_SUBMITTED | RESOLVED
+  reason            String
+  request           String?
+  response          String?
+  responseDueAt     DateTime?
+  externalRef       String?
+  documents         String?   // serialized JSON array of { type, name, storageRef }
+  actorId           String?
+  respondedAt       DateTime?
+  resolvedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  hospital          Hospital?  @relation(fields: [hospitalId], references: [id])
+  claim             PmjayClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([hospitalId])
+  @@index([claimId])
+  @@index([status])
+}
+
+// PM-JAY package — empanelled procedure package. preauthRequired gates the
+// completeness check (some packages require pre-auth, some don't).
+model PmjayPackage {
+  id                String    @id @default(cuid())
+  hospitalId        String?
+  packageCode       String
+  packageName       String
+  preauthRequired   Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  hospital          Hospital?      @relation(fields: [hospitalId], references: [id])
+  claims            PmjayClaim[]
+  preauths          PmjayPreauth[]
+  documentRequirements ClaimDocumentRequirement[]
+
+  @@index([hospitalId])
+  @@index([packageCode])
+}
+
+// Claim document requirement — per-package document-type rules used by the
+// completeness engine. A null packageId means the requirement applies to all
+// packages for that hospital.
+model ClaimDocumentRequirement {
+  id              String    @id @default(cuid())
+  hospitalId      String?
+  packageId       String?
+  documentType    String
+  stage           String    // PREAUTH | CLAIM | BOTH
+  required        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  hospital        Hospital?     @relation(fields: [hospitalId], references: [id])
+  package         PmjayPackage?  @relation(fields: [packageId], references: [id])
+
+  @@index([hospitalId])
+  @@index([packageId])
+}
+
+// Webhook event lifecycle row. Implements at-most-once processing under
+// provider retries and concurrent workers. UNIQUE on (provider,
+// providerEventId) is the idempotency key. Status transitions:
+// RECEIVED → PROCESSING → PROCESSED | FAILED_RETRYABLE → (reclaim) →
+// PROCESSING | FAILED_PERMANENT.
+model WebhookEvent {
+  id                  String    @id @default(cuid())
+  hospitalId          String?
+  provider            String    // WHATSAPP | RAZORPAY | OTHER
+  providerEventId     String
+  status              String    // RECEIVED | PROCESSING | PROCESSED | FAILED_RETRYABLE | FAILED_PERMANENT
+  attempts            Int       @default(0)
+  processingStartedAt DateTime?
+  leaseExpiresAt      DateTime?
+  processedAt         DateTime?
+  lastError           String?
+  lastFailedAt        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  hospital            Hospital? @relation(fields: [hospitalId], references: [id])
+
+  @@unique([provider, providerEventId])
+  @@index([hospitalId])
+  @@index([status, leaseExpiresAt])
+}
